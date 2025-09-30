@@ -2,6 +2,7 @@ from app.core.database_simple import db
 from app.services.lead_classifier import classifier
 from app.integrations.whatsapp.megaapi_client import megaapi
 from app.services.ai_responder import ai_responder
+from app.services.vendor_rotation import vendor_rotation
 import logging
 import json
 
@@ -12,6 +13,11 @@ class MessageProcessor:
         """Processa mensagem recebida do webhook"""
         try:
             logger.info(f"Dados recebidos para processar: {data}")
+
+            # NOVO: Ignorar mensagens de grupo (só processar privadas)
+            if data.get('isGroup', False):
+                logger.info("Mensagem de grupo - ignorando")
+                return None
             
             # Verifica se é mensagem válida
             if not data.get('message'):
@@ -59,14 +65,42 @@ class MessageProcessor:
                 classification
             )
             
-            # 6. Se for HOT/BOOKING_READY, criar handoff
+            # 6. Se for HOT/BOOKING_READY, criar handoff e notificar vendedor
             if classification['category'] in ['HOT', 'BOOKING_READY']:
+                # Criar handoff no banco
                 db.insert('handoff_queue', {
                     'conversation_id': conversation['id'],
                     'priority': 'HIGH',
                     'reason': f"Lead {classification['category']}: {classification.get('reasoning', '')}"
                 })
                 logger.info("Handoff criado para atendimento humano")
+                
+                # NOVO: Notificar grupo de vendas com vendedor designado
+                notification_result = await vendor_rotation.notify_group_hot_lead(
+                    phone=phone,
+                    message=text,
+                    classification=classification,
+                    conversation_id=conversation['id']
+                )
+                
+                # Log do vendedor designado
+                vendor_name = notification_result.get('vendor', 'nossa equipe')
+                logger.info(f"🎯 Vendedor designado: {vendor_name}")
+                
+                # Substituir a resposta da IA pela mensagem personalizada do vendedor
+                if notification_result.get('vendor'):
+                    response = f"""Perfeito! 🎯
+
+Já acionei {vendor_name}, nosso(a) especialista em reservas.
+{vendor_name} receberá sua mensagem agora e entrará em contato em instantes!
+
+Por favor, aguarde só um minutinho... ⏰"""
+                else:
+                    response = """Perfeito! 🎯
+
+Nossa equipe de reservas foi notificada e entrará em contato em instantes!
+
+Por favor, aguarde só um minutinho... ⏰"""
             
             # 7. Enviar resposta via WhatsApp
             if response:
