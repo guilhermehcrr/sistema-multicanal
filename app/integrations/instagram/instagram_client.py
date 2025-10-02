@@ -46,9 +46,16 @@ class InstagramClient:
         
         # ID do próprio usuário (para filtrar mensagens)
         try:
-            self.my_user_id = self.cl.user_id_from_username(self.username)
-        except:
-            self.my_user_id = self.cl.user_id
+        # Tenta pegar do objeto de sessão primeiro
+            if hasattr(self.cl, 'user_id') and self.cl.user_id:
+                self.my_user_id = self.cl.user_id
+            else:
+                # Se não tiver, tenta buscar (pode dar erro)
+                self.my_user_id = self.cl.user_id_from_username(self.username)
+        except Exception as e:
+            logger.warning(f"Não foi possível obter user_id: {e}")
+            # Use um ID temporário ou deixe None
+            self.my_user_id = None
     
     def login(self):
         """Faz login no Instagram com sessão persistente"""
@@ -142,7 +149,7 @@ class InstagramClient:
         try:
             # Limitar tamanho para não crescer infinitamente
             if len(self.processed_messages) > 1000:
-                # Manter apenas as 800 mais recentes
+                # Manter apenas  800 
                 self.processed_messages = set(list(self.processed_messages)[-800:])
             
             with open(self.processed_messages_file, 'w') as f:
@@ -192,7 +199,7 @@ class InstagramClient:
                             pass
                     
                     # Sempre verificar pelo menos a última mensagem
-                    if should_check or True:
+                    if should_check:
                         # Buscar mensagens da thread
                         messages = self.cl.direct_messages(thread.id, amount=5)
                         

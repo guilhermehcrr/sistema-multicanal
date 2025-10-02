@@ -154,8 +154,5 @@ Por favor, aguarde só um minutinho... ⏰"""
             'status': 'active'
         })
     
-    async def decide_action(self, classification: dict, text: str, conversation: dict):
-        """Método mantido por compatibilidade mas não é mais usado"""
-        pass
 
 processor = MessageProcessor()

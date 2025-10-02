@@ -99,13 +99,18 @@ class VendorRotationSystem:
             # Próximo vendedor
             next_vendor = self.vendors[(vendor_index + 1) % len(self.vendors)]
             
-            # Detectar se é email ou WhatsApp
-            if channel == 'email' or ('@' in phone and '.' in phone):
+            ## Detectar canal corretamente
+            if channel == 'email':
                 channel_type = '📧 EMAIL'
-                contact_info = phone  # Email
+                contact_info = phone
                 contact_link = f"mailto:{contact_info}"
                 contact_display = f"📧 {contact_info}"
-            else:
+            elif channel == 'instagram':
+                channel_type = '📸 INSTAGRAM'
+                username_clean = phone.replace('@', '')
+                contact_link = f"https://instagram.com/{username_clean}"
+                contact_display = f"📸 @{username_clean}"
+            else:  # whatsapp (padrão)
                 channel_type = '📱 WHATSAPP'
                 contact_info = phone.replace('+', '').replace(' ', '')
                 contact_link = f"https://wa.me/{contact_info}"
@@ -154,35 +159,51 @@ _{message[:200]}{"..." if len(message) > 200 else ""}_
                 # Enviar para o grupo
                 await megaapi.send_message(self.sales_group_id, group_message)
                 
-                # Mensagem privada para o vendedor
+                # Mensagem privada para o vendedor baseada no canal
                 if channel == 'email':
                     private_msg = f"""🚨 *EMAIL URGENTE!* 🚨
 
-📧 Cliente esperando resposta por EMAIL!
+            📧 Cliente esperando resposta por EMAIL!
 
-De: {phone}
-Assunto: {message[:50]}...
+            De: {phone}
+            Assunto: {message[:50]}...
 
-✉️ Responda o email AGORA!
-{contact_link}"""
-                else:
+            ✉️ Responda o email AGORA!
+            {contact_link}"""
+
+                elif channel == 'instagram':  # elif e minúsculo!
+                    private_msg = f"""🚨 *INSTAGRAM URGENTE!* 🚨
+
+            📸 Cliente esperando no Instagram!
+
+            Clique para abrir:
+            {contact_link}
+
+            Mensagem: "{message[:100]}{"..." if len(message) > 100 else ""}" """
+
+                else:  # whatsapp (padrão)
                     private_msg = f"""🚨 *SUA VEZ!* 🚨
 
-📱 Cliente esperando no WhatsApp!
+            📱 Cliente esperando no WhatsApp!
 
-Clique para abrir:
-{contact_link}
+            Clique para abrir:
+            {contact_link}
 
-Mensagem: "{message[:100]}{"..." if len(message) > 100 else ""}" """
+            Mensagem: "{message[:100]}{"..." if len(message) > 100 else ""}" """
                 
-                # Enviar para o vendedor específico
+                # Enviar UMA VEZ só para o vendedor
                 await megaapi.send_message(vendor['phone'], private_msg)
                 
                 logger.info(f"✅ Notificações enviadas - Vendedor: {vendor['name']}")
+                
                 return {
                     "status": "sent",
                     "vendor": vendor['name']
                 }
+                            
+                
+                
+
                 
         except Exception as e:
             logger.error(f"❌ Erro enviando notificação: {e}")
